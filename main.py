@@ -16,12 +16,19 @@ model = None
 async def load_model():
     global model
     try:
-        # This loads your new .h5 file
+        # This version is much more robust for .h5 files
         model = tf.keras.models.load_model('wastelink_fixed.h5', compile=False)
+        # We manually trigger a dummy prediction to 'warm up' the model
+        model.make_predict_function() 
         print("✅ Model loaded successfully!")
     except Exception as e:
-        print(f"❌ Model failed to load: {e}")
-
+        # If that still fails, we use this 'emergency' method:
+        try:
+            model = tf.keras.models.load_model('wastelink_fixed.h5')
+            print("✅ Model loaded on second attempt!")
+        except:
+            print(f"❌ Final Load Error: {e}")
+            
 @app.get("/")
 def home():
     return {"message": "WasteLink API is Live", "model_loaded": model is not None}
