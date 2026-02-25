@@ -5,6 +5,9 @@ from PIL import Image
 from fastapi import FastAPI, UploadFile, File
 import tensorflow as tf
 
+# This tells Keras 3 to behave like Keras 2 for loading
+os.environ["TF_USE_LEGACY_KERAS"] = "1"
+
 app = FastAPI()
 
 CATEGORIES = ['general', 'metal', 'organic', 'paper', 'plastic']
@@ -14,15 +17,16 @@ model = None
 async def load_model():
     global model
     try:
-        # Point to the NEW .keras file
-        model = tf.keras.models.load_model('wastelink_v3.keras')
-        print("✅ SUCCESS: Keras 3 Model Loaded!")
+        # We use compile=False to stop Keras from trying to map the layers
+        # which is where that '2 input tensors' error comes from.
+        model = tf.keras.models.load_model('wastelink_v3.keras', compile=False)
+        print("✅ SUCCESS: Model loaded without layer conflicts!")
     except Exception as e:
         print(f"❌ Load Error: {e}")
 
 @app.get("/")
 def home():
-    return {"message": "WasteLink API", "model_loaded": model is not None}
+    return {"status": "Online", "model_loaded": model is not None}
 
 @app.post("/predict")
 async def predict(image: UploadFile = File(...)):
@@ -35,11 +39,11 @@ async def predict(image: UploadFile = File(...)):
     img_array = (img_array / 127.5) - 1.0
     img_array = np.expand_dims(img_array, axis=0)
     
-    # Keras 3 prediction
-    predictions = model.predict(img_array, verbose=0)
-    predicted_idx = np.argmax(predictions[0])
+    # CRITICAL FIX: We use the model as a function to bypass the .predict() layer check
+    predictions = model(img_array, training=False)
+    predicted_idx = np.argmax(predictions.numpy()[0])
     
     return {
         "prediction": CATEGORIES[predicted_idx],
-        "confidence": float(np.max(predictions[0]))
+        "confidence": float(np.max(predictions.numpy()[0]))
     }
