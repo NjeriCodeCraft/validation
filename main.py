@@ -2,22 +2,31 @@ import io
 import numpy as np
 from PIL import Image
 from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware  # <-- NEW
 import tensorflow as tf
 from tensorflow.keras import layers, models
 
 app = FastAPI()
 
+# --- THE CORS FIX START ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+# --- THE CORS FIX END ---
+
 CATEGORIES = ['general', 'metal', 'organic', 'paper', 'plastic']
 model = None
 
 def build_model_structure():
-    # We build the body manually so Render doesn't get confused
     base_model = tf.keras.applications.MobileNetV2(
         input_shape=(180, 180, 3), 
         include_top=False, 
         weights=None 
     )
-    
     m = models.Sequential([
         layers.Input(shape=(180, 180, 3)),
         layers.Rescaling(1./127.5, offset=-1),
@@ -32,7 +41,6 @@ async def startup_event():
     global model
     try:
         model = build_model_structure()
-        # Now we just pour the weights into the body
         model.load_weights('model_weights.weights.h5')
         print("✅ SUCCESS: Model is ready!")
     except Exception as e:
