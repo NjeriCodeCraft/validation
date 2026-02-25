@@ -1,45 +1,55 @@
-import os
 import io
 import numpy as np
 from PIL import Image
 from fastapi import FastAPI, UploadFile, File
 import tensorflow as tf
-
-# This tells Keras 3 to behave like Keras 2 for loading
-os.environ["TF_USE_LEGACY_KERAS"] = "1"
+from tensorflow.keras import layers, models
 
 app = FastAPI()
 
 CATEGORIES = ['general', 'metal', 'organic', 'paper', 'plastic']
 model = None
 
+def build_model_structure():
+    # We build the body manually so Render doesn't get confused
+    base_model = tf.keras.applications.MobileNetV2(
+        input_shape=(180, 180, 3), 
+        include_top=False, 
+        weights=None 
+    )
+    
+    m = models.Sequential([
+        layers.Input(shape=(180, 180, 3)),
+        layers.Rescaling(1./127.5, offset=-1),
+        base_model,
+        layers.GlobalAveragePooling2D(),
+        layers.Dense(len(CATEGORIES), activation='softmax')
+    ])
+    return m
+
 @app.on_event("startup")
-async def load_model():
+async def startup_event():
     global model
     try:
-        # We use compile=False to stop Keras from trying to map the layers
-        # which is where that '2 input tensors' error comes from.
-        model = tf.keras.models.load_model('wastelink_v3.keras', compile=False)
-        print("✅ SUCCESS: Model loaded without layer conflicts!")
+        model = build_model_structure()
+        # Now we just pour the weights into the body
+        model.load_weights('model_weights.weights.h5')
+        print("✅ SUCCESS: Model is ready!")
     except Exception as e:
-        print(f"❌ Load Error: {e}")
+        print(f"❌ Error: {e}")
 
 @app.get("/")
 def home():
-    return {"status": "Online", "model_loaded": model is not None}
+    return {"model_loaded": model is not None}
 
 @app.post("/predict")
 async def predict(image: UploadFile = File(...)):
-    if model is None:
-        return {"error": "Model not loaded"}
-    
+    if model is None: return {"error": "Model not ready"}
     contents = await image.read()
     img = Image.open(io.BytesIO(contents)).convert('RGB').resize((180, 180))
-    img_array = tf.keras.preprocessing.image.img_to_array(img)
-    img_array = (img_array / 127.5) - 1.0
+    img_array = np.array(img).astype(np.float32)
     img_array = np.expand_dims(img_array, axis=0)
     
-    # CRITICAL FIX: We use the model as a function to bypass the .predict() layer check
     predictions = model(img_array, training=False)
     predicted_idx = np.argmax(predictions.numpy()[0])
     
