@@ -2,4 +2,5 @@ fastapi
 uvicorn
 python-multipart
 tensorflow-cpu
+tf_keras
 Pillow
