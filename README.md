@@ -1,6 +1,7 @@
 # ♻️ WasteLink Image Validation API
 
 WasteLink is a FastAPI-based machine learning service designed to classify waste into five categories. This tool helps automate waste sorting to improve recycling efficiency.
+This API was built as the backend ML service for a mobile waste management app. The model endpoint accepts image uploads and returns waste classification results in real time.
 
 ## 🚀 Features
 * **Custom ML Model:** Powered by a MobileNetV2 architecture fine-tuned on custom waste datasets.
